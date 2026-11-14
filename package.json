@@ -1,0 +1,14 @@
+{
+  "name": "follow-audit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local app that shows who doesn't follow you back on Instagram, synced via the official Graph API or a manual data export.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/parse.test.js && node test/server.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

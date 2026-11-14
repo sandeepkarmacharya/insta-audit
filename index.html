@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Follow Audit — Instagram followers &amp; unfollowers</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='1' x2='1' y2='0'%3E%3Cstop offset='0' stop-color='%23feda75'/%3E%3Cstop offset='.5' stop-color='%23d62976'/%3E%3Cstop offset='1' stop-color='%234f5bd5'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='24' fill='url(%23g)'/%3E%3Ctext x='50' y='68' font-size='52' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EF%3C/text%3E%3C/svg%3E" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">F</span>
+    <div>
+      <h1>Follow Audit</h1>
+      <p class="tagline">See who doesn't follow you back — synced automatically via the official Instagram API.</p>
+    </div>
+  </div>
+  <div class="topbar-actions">
+    <span id="connChip" class="conn-chip unknown">checking…</span>
+    <a id="btnConnect" class="btn primary" href="/auth/login" hidden>Connect Instagram</a>
+    <button id="btnSync" class="btn primary" type="button" hidden>⟳ Sync now</button>
+    <button id="btnDisconnect" class="btn ghost danger" type="button" hidden>Disconnect</button>
+    <button id="btnSample" class="btn ghost" type="button">Sample data</button>
+    <button id="btnClear" class="btn ghost danger" type="button">Clear snapshots</button>
+  </div>
+</header>
+
+<main>
+  <section id="connectPanel" class="connect-panel" hidden>
+    <h2>1. Connect your Instagram account</h2>
+    <p>
+      Click <strong>Connect Instagram</strong> — you'll approve access on Instagram's own page (OAuth).
+      This app never sees your password. Once connected, press <strong>⟳ Sync now</strong> any time to
+      pull your followers and following lists automatically; every sync is saved as a snapshot, so the
+      app can show who unfollowed you between syncs.
+    </p>
+    <p class="hint">
+      The Graph API only exposes follower/following lists for <strong>Business or Creator</strong> accounts,
+      and the server needs a free Meta app configured (<code>IG_APP_ID</code> / <code>IG_APP_SECRET</code> in
+      <code>.env</code> — see README). Personal accounts can skip connecting and use the manual upload below.
+    </p>
+    <p id="configWarning" class="config-warning" hidden>Server is not configured for Instagram login yet — set <code>IG_APP_ID</code> and <code>IG_APP_SECRET</code> in <code>.env</code>, restart, then connect.</p>
+    <a id="btnConnectBig" class="btn primary big" href="/auth/login">Connect Instagram</a>
+  </section>
+
+  <section class="privacy-note">
+    <strong>Privacy:</strong> this server runs on your own machine (127.0.0.1) and stores everything locally in
+    <code>data/store.json</code>. No data is sent anywhere except the official Instagram Graph API using your own
+    access token. You can disconnect and delete all snapshots at any time.
+  </section>
+
+  <section class="upload-section">
+    <h2>2. Or upload an Instagram export manually <span class="hint">(fallback — no API needed)</span></h2>
+    <div class="upload-grid">
+      <div class="dropzone" id="dropFollowers" tabindex="0" role="button" aria-label="Upload followers JSON">
+        <input type="file" id="fileFollowers" accept=".json,application/json" hidden />
+        <div class="dz-icon">👥</div>
+        <div class="dz-title">Followers JSON</div>
+        <div class="dz-sub" id="followersFileName">Drop <code>followers_1.json</code> here or click to browse</div>
+      </div>
+      <div class="dropzone" id="dropFollowing" tabindex="0" role="button" aria-label="Upload following JSON">
+        <input type="file" id="fileFollowing" accept=".json,application/json" hidden />
+        <div class="dz-icon">➡️</div>
+        <div class="dz-title">Following JSON</div>
+        <div class="dz-sub" id="followingFileName">Drop <code>following.json</code> here or click to browse</div>
+      </div>
+      <div class="dropzone wide" id="dropMulti" tabindex="0" role="button" aria-label="Upload both JSON files at once">
+        <input type="file" id="fileMulti" accept=".json,application/json" multiple hidden />
+        <div class="dz-icon">📁</div>
+        <div class="dz-title">Or drop both files at once</div>
+        <div class="dz-sub">Names are auto-detected (<code>followers…json</code> / <code>following…json</code>)</div>
+      </div>
+    </div>
+  </section>
+
+  <div id="status" class="status" hidden></div>
+  <div id="lastSync" class="last-sync" hidden></div>
+  <div id="changesBanner" class="changes-banner" hidden></div>
+
+  <section id="results" hidden>
+    <div class="stats">
+      <div class="stat"><span class="stat-num" id="statFollowers">0</span><span class="stat-label">Followers</span></div>
+      <div class="stat"><span class="stat-num" id="statFollowing">0</span><span class="stat-label">Following</span></div>
+      <div class="stat"><span class="stat-num" id="statMutual">0</span><span class="stat-label">Mutual</span></div>
+      <div class="stat accent"><span class="stat-num" id="statNotBack">0</span><span class="stat-label">Not following you back</span></div>
+      <div class="stat"><span class="stat-num" id="statFans">0</span><span class="stat-label">Follow you, you don't follow back</span></div>
+    </div>
+
+    <div class="toolbar">
+      <nav class="tabs" id="tabs">
+        <button class="tab active" data-tab="notBack" type="button">Not following back <span class="count" id="countNotBack"></span></button>
+        <button class="tab" data-tab="fans" type="button">Fans <span class="count" id="countFans"></span></button>
+        <button class="tab" data-tab="mutual" type="button">Mutual <span class="count" id="countMutual"></span></button>
+        <button class="tab" data-tab="followers" type="button">All followers <span class="count" id="countFollowers"></span></button>
+        <button class="tab" data-tab="following" type="button">All following <span class="count" id="countFollowing"></span></button>
+        <button class="tab" data-tab="changes" type="button">Changes / unfollowers <span class="count" id="countChanges"></span></button>
+      </nav>
+      <div class="toolbar-right">
+        <input type="search" id="search" placeholder="Filter usernames…" />
+        <button id="btnCsv" class="btn" type="button">Export CSV</button>
+      </div>
+    </div>
+
+    <div id="changesPanel" class="changes-panel" hidden>
+      <label class="compare-label">Compare latest sync with snapshot:
+        <select id="snapshotSelect"></select>
+      </label>
+      <p id="changesEmpty" class="empty" hidden>Sync or upload at least twice to see changes (unfollowers, new followers).</p>
+      <div class="changes-grid" id="changesGrid">
+        <div class="change-group new"><h3>🆕 New followers <span class="count" id="chNewFollowers"></span></h3><ul id="listNewFollowers" class="user-list"></ul></div>
+        <div class="change-group lost"><h3>💔 Lost followers (unfollowed you) <span class="count" id="chLostFollowers"></span></h3><ul id="listLostFollowers" class="user-list"></ul></div>
+        <div class="change-group"><h3>➕ Newly followed <span class="count" id="chNewFollowing"></span></h3><ul id="listNewFollowing" class="user-list"></ul></div>
+        <div class="change-group"><h3>➖ Unfollowed <span class="count" id="chLostFollowing"></span></h3><ul id="listLostFollowing" class="user-list"></ul></div>
+      </div>
+    </div>
+
+    <ul id="userList" class="user-list main-list"></ul>
+    <p id="emptyList" class="empty" hidden>No usernames match.</p>
+  </section>
+
+  <section class="snapshots-section">
+    <h2>Saved snapshots <span class="hint">(stored locally on this machine in data/store.json)</span></h2>
+    <ul id="snapshotList" class="snapshot-list"></ul>
+    <p id="noSnapshots" class="empty">No snapshots yet. Connect Instagram and press “⟳ Sync now” — or upload an export — then do it again later to see who unfollowed you.</p>
+  </section>
+</main>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="lib/parse.js"></script>
+<script src="lib/sample.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
